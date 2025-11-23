@@ -1,80 +1,114 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>巴渝听书 · 川渝方言（必成版）</title>
+<title>巴渝听书 · 正宗川渝方言在线版</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.1/full/pyodide.js"></script>
 <style>
-  body{font-family:Microsoft YaHei;background:#f5f5f5;padding:20px}
-  .box{max-width:900px;margin:0 auto;background:#fff;padding:30px;border-radius:15px;box-shadow:0 8px 30px rgba(0,0,0,0.1)}
-  h1{color:#d32f2f;text-align:center;font-size:38px}
-  textarea{width:100%;height:320px;padding:15px;font-size:18px;border:2px solid #ddd;border-radius:10px}
-  .btns{margin:20px 0;display:flex;gap:15px;flex-wrap:wrap;align-items:center}
-  select,button{padding:12px 20px;font-size:16px;border-radius:8px}
-  button{cursor:pointer;color:#fff;border:none;font-weight:bold}
-  #preview{background:#0066cc}
-  #gen{background:#d32f2f}
-  #dl{background:#0a8c2a;opacity:0.5;pointer-events:none}
-  #dl.ok{opacity:1;pointer-events:auto}
-  #msg{margin-left:15px;font-weight:bold;color:#d32f2f}
+  :root{--red:#d32f2f;--bg:#ffffff;--line:#e9e9e9;--radius:16px;--shadow:0 10px 35px rgba(0,0,0,0.1);}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:20px}
+  .wrap{max-width:1100px;margin:0 auto}
+  .nav{background:var(--bg);padding:15px 0;position:sticky;top:0;z-index:99;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
+  .logo{font-size:32px;font-weight:900;color:var(--red)}
+  .card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:30px;margin-bottom:30px}
+  textarea{width:100%;height:340px;padding:20px;font-size:18px;border:2px solid var(--line);border-radius:12px;resize:vertical}
+  .row{margin-top:20px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  select,button{padding:14px 28px;font-size:17px;border-radius:12px;border:none;cursor:pointer}
+  button{background:var(--red);color:#fff;font-weight:bold;box-shadow:0 6px 18px rgba(211,47,47,0.3)}
+  button:hover{transform:translateY(-2px)}
+  button:disabled{opacity:0.6;cursor:not-allowed}
+  #status{margin-left:20px;font-weight:bold;color:var(--red);font-size:18px}
+  .player{margin-top:30px;padding:25px;background:#f9f9f9;border-radius:12px;display:none}
+  .progress{height:10px;background:#eee;border-radius:5px;overflow:hidden;margin:15px 0}
+  .bar{height:100%;width:0%;background:var(--red);transition:width .2s}
+  #summary{margin-top:15px;color:#555;font-size:16px;line-height:1.8}
+  #downloadBtn{background:#2e7d32;opacity:0.5;pointer-events:none}
+  #downloadBtn.ready{opacity:1;pointer-events:auto}
 </style>
 </head>
 <body>
-<div class="box">
-  <h1>巴渝听书</h1>
-  <textarea id="txt" placeholder="输入任何文字，马上用正宗四川话读出来（爪子、巴适、要得、莫得问题……）"></textarea>
-  
-  <div class="btns">
-    <select id="v">
-      <option value="川渝男生">川渝男生（最正宗四川话）</option>
-      <option value="老汉儿">老汉儿（重庆味）</option>
-      <option value="川渝女生">川渝女生</option>
-    </select>
-    <button id="preview">试听前200字</button>
-    <button id="gen">生成完整语音</button>
-    <button id="dl">下载MP3</button>
-    <span id="msg">就绪</span>
+<div class="wrap">
+  <div class="nav">
+    <div class="logo">巴渝听书</div>
+    <div style="font-size:22px;font-weight:600">正宗川渝方言在线版 · 爪子哦，巴适得板！</div>
   </div>
-  
-  <audio id="player" controls style="width:100%;margin-top:20px;display:none"></audio>
+
+  <div class="card">
+    <textarea id="textInput" placeholder="输入任何文字，全球都能听到最地道的川渝话（爪子、瓜娃子、要得、莫得问题……全都会说！）">爪子哦，今天要得要得，搞个串串吃起，莫得问题，巴适得板！瓜娃子莫慌！</textarea>
+    
+    <div class="row">
+      <select id="voice">
+        <option value="zh-CN-Sichuan-YunxiNeural">川渝男生（最正宗四川话）</option>
+        <option value="zh-CN-YunyangNeural">老汉儿（重庆崽儿味）</option>
+        <option value="zh-CN-XiaoxiaoNeural">川渝女生（温柔妹儿）</option>
+        <option value="zh-CN-XiaoshuangNeural">小娃儿（童声）</option>
+      </select>
+      <button id="generate">生成并播放</button>
+      <button id="downloadBtn">下载MP3</button>
+      <span id="status">就绪</span>
+    </div>
+  </div>
+
+  <div class="card player" id="player">
+    <div style="font-weight:600;margin-bottom:15px;font-size:20px">播放器</div>
+    <audio id="audio" controls style="width:100%"></audio>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div id="summary"></div>
+  </div>
 </div>
 
 <script>
-async function go(text, voice) {
-  if (!text.trim()) return alert("请输入文字");
-  document.getElementById("msg").textContent = "生成中…（10-30秒）";
-  document.getElementById("gen").disabled = true;
+let audio = null;
+async function generate() {
+  const text = document.getElementById("textInput").value.trim() || "爪子哦，巴适得板！";
+  const voice = document.getElementById("voice").value;
+  if (!text) return alert("爪子哦，你还没输文字嘛！");
   
-  try {
-    const r = await fetch("http://127.0.0.1:5000/tts", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({text: text, voice: voice})
-    });
-    
-    const json = await r.json();
-    console.log("后端返回：", json);   // ← 这行很重要！打开 F12 能看到真实错误
-    
-    if (json.audio_url) {
-      const url = "http://127.0.0.1:5000" + json.audio_url;
-      const p = document.getElementById("player");
-      p.src = url;
-      p.style.display = "block";
-      p.play();
-      document.getElementById("msg").textContent = "生成成功！正在播放";
-      document.getElementById("dl").classList.add("ok");
-      document.getElementById("dl").onclick = ()=> {location.href = url + "?download=1"};
-    } else {
-      document.getElementById("msg").textContent = "失败：" + json.error;
-    }
-  } catch (e) {
-    document.getElementById("msg").textContent = "连接失败（但后端可能其实在跑）";
-    console.error(e);
-  }
-  document.getElementById("gen").disabled = false;
+  document.getElementById("status").textContent = "川渝方言引擎加载中（第一次稍慢）...";
+  document.getElementById("generate").disabled = true;
+  document.getElementById("downloadBtn").classList.remove("ready");
+  
+  let pyodide = await loadPyodide();
+  await pyodide.loadPackage("micropip");
+  await pyodide.runPythonAsync(`import micropip\nawait micropip.install('edge-tts')`);
+  
+  document.getElementById("status").textContent = "生成中……爪子哦要来了！";
+  
+  await pyodide.runPythonAsync(`
+    import edge_tts, js
+    text = """${text.replace(/`/g, '\\`')}"""
+    c = edge_tts.Communicate(text, "${voice}")
+    await c.save("speech.mp3")
+    js.done()
+  `);
 }
 
-document.getElementById("preview").onclick = () => go(document.getElementById("txt").value.slice(0,200) || "爪子哦，试听一下四川话，巴适得板！", document.getElementById("v").value);
-document.getElementById("gen").onclick     = () => go(document.getElementById("txt").value || "爪子哦，今天要去撸串串，巴适惨了！", document.getElementById("v").value);
+function done() {
+  const url = "speech.mp3?" + Date.now();
+  audio = new Audio(url);
+  document.getElementById("audio").src = url;
+  document.getElementById("player").style.display = "block";
+  audio.play();
+  
+  // 摘要
+  const first = document.getElementById("textInput").value.split(/[。！？\n]/)[0] || "";
+  document.getElementById("summary").textContent = "生成的语音内容摘要：" + first + "……";
+  
+  // 下载按钮
+  document.getElementById("downloadBtn").classList.add("ready");
+  document.getElementById("downloadBtn").onclick = () => location.href = url;
+  
+  document.getElementById("status").textContent = "爪子哦！！！巴适惨了！！！";
+  document.getElementById("generate").disabled = false;
+  
+  // 进度条
+  audio.ontimeupdate = () => {
+    const percent = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+    document.getElementById("bar").style.width = percent + "%";
+  };
+}
+window.generate = generate;
+window.done = done;
 </script>
 </body>
 </html>
