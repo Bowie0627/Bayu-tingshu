@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>巴渝听书 · 川渝方言在线版</title>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.28.1/full/pyodide.js"></script>
+<style>
+  body{font-family:"Microsoft YaHei",sans-serif;background:linear-gradient(135deg,#ff9a9e,#fad0c4);margin:0;padding:20px;min-height:100vh}
+  .box{max-width:960px;margin:40px auto;background:#fff;padding:40px;border-radius:25px;box-shadow:0 20px 50px rgba(0,0,0,0.15);text-align:center}
+  h1{font-size:48px;color:#d32f2f;margin-bottom:10px}
+  .tag{font-size:20px;color:#666;margin-bottom:30px}
+  textarea{width:100%;height:220px;padding:20px;font-size:19px;border:3px solid #ffe0e0;border-radius:16px;margin:20px 0;outline:none}
+  .btns{margin:30px 0}
+  select,button{padding:16px 32px;font-size:19px;border-radius:16px;margin:8px;border:none;cursor:pointer}
+  select{background:#fff;border:2px solid #ddd}
+  button{background:#d32f2f;color:#fff;font-weight:bold;box-shadow:0 8px 20px rgba(211,47,47,0.4)}
+  button:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(211,47,47,0.5)}
+  #msg{margin-top:20px;font-size:22px;font-weight:bold;color:#d32f2f}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>巴渝听书</h1>
+  <div class="tag">正宗川渝方言AI听书 · 爪子哦，巴适得板！</div>
+  
+  <textarea id="txt" placeholder="输入任何文字，马上用正宗川渝方言读出来～">爪子哦，今天要得要得，搞个串串吃起，莫得问题，巴适得板！瓜娃子莫慌！</textarea>
+  
+  <div class="btns">
+    <select id="voice">
+      <option value="zh-CN-Sichuan-YunxiNeural">川渝男生（最正宗四川话）</option>
+      <option value="zh-CN-YunyangNeural">老汉儿（重庆崽儿味）</option>
+      <option value="zh-CN-XiaoxiaoNeural">川渝女生（温柔妹儿）</option>
+      <option value="zh-CN-XiaoshuangNeural">小娃儿（童声）</option>
+    </select>
+    <button onclick="speak()">立即听方言！</button>
+  </div>
+  
+  <div id="msg">点击按钮，爪子哦马上就来吼你～</div>
+  <audio id="player" controls style="width:90%;margin-top:30px;display:none"></audio>
+</div>
+
+<script type="text/javascript">
+async function speak() {
+  let pyodide = await loadPyodide();
+  document.getElementById("msg").innerText = "川渝方言引擎加载中（第一次稍慢，爪子哦要来了）...";
+  
+  await pyodide.loadPackage("micropip");
+  const micropip = pyodide.pyimport("micropip");
+  await micropip.install("edge-tts");
+  
+  document.getElementById("msg").innerText = "生成中……爪子哦在路上！";
+  
+  await pyodide.runPythonAsync(`
+    import edge_tts
+    import js
+    text = """${document.getElementById('txt').value}"""
+    voice = "${document.getElementById('voice').value}"
+    c = edge_tts.Communicate(text, voice)
+    await c.save("output.mp3")
+    js.play()
+  `);
+}
+
+function play() {
+  const audio = document.getElementById("player");
+  audio.src = "output.mp3?" + Date.now();
+  audio.style.display = "block";
+  audio.play();
+  document.getElementById("msg").innerText = "爪子哦！！！巴适惨了！！！";
+}
+window.speak = speak;
+window.play = play;
+</script>
+</body>
+</html>
